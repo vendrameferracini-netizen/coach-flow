@@ -1,3 +1,8 @@
+"use client";
+
+import { useActionState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { createStudentAction, type CreateStudentState } from "@/app/(app)/alunos/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -5,25 +10,54 @@ import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { formatDate } from "@/lib/utils";
 import type { Student } from "@/types/domain";
 
+const initialState: CreateStudentState = { ok: false, message: "" };
+
 export function StudentList({ students }: { students: Student[] }) {
+  const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
+  const [state, formAction, isPending] = useActionState(createStudentAction, initialState);
+
+  useEffect(() => {
+    if (!state.ok) return;
+    formRef.current?.reset();
+    router.refresh();
+  }, [router, state.ok]);
+
   return (
     <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
       <Card>
         <h2 className="text-xl font-black">Cadastrar aluno</h2>
-        <p className="mt-1 text-sm text-zinc-500">Ao salvar em produção, o Supabase Auth cria o login e gera senha inicial.</p>
-        <form className="mt-5 grid gap-4 md:grid-cols-2">
-          <Field label="Nome"><Input placeholder="Nome completo" /></Field>
-          <Field label="Telefone"><Input placeholder="(00) 00000-0000" /></Field>
-          <Field label="E-mail"><Input type="email" placeholder="aluno@email.com" /></Field>
-          <Field label="Nascimento"><Input type="date" /></Field>
-          <Field label="Sexo"><Select><option>feminino</option><option>masculino</option><option>outro</option></Select></Field>
-          <Field label="Nível"><Select><option>iniciante</option><option>intermediario</option><option>avancado</option></Select></Field>
-          <Field label="Peso"><Input type="number" placeholder="82" /></Field>
-          <Field label="Altura"><Input placeholder="1.78" /></Field>
-          <Field label="Objetivo"><Input placeholder="Hipertrofia" /></Field>
-          <Field label="Status"><Select><option>active</option><option>inactive</option><option>blocked</option></Select></Field>
-          <Field label="Observações"><Textarea className="md:col-span-2" /></Field>
-          <div className="md:col-span-2"><Button type="button">Salvar aluno e criar login</Button></div>
+        <p className="mt-1 text-sm text-zinc-500">Crie o aluno e envie um convite seguro para ele definir a senha.</p>
+        <form ref={formRef} action={formAction} className="mt-5 grid gap-4 md:grid-cols-2">
+          <Field label="Nome completo"><Input name="fullName" placeholder="Nome completo" required /></Field>
+          <Field label="E-mail"><Input name="email" type="email" placeholder="aluno@email.com" required /></Field>
+          <Field label="Telefone"><Input name="phone" placeholder="(00) 00000-0000" /></Field>
+          <Field label="Data de nascimento"><Input name="birthDate" type="date" /></Field>
+          <Field label="Objetivo"><Input name="goal" placeholder="Hipertrofia, emagrecimento..." /></Field>
+          <Field label="Data de início"><Input name="joinedAt" type="date" /></Field>
+          <Field label="Frequência de treino">
+            <Input name="workoutFrequencyDays" type="number" min={1} defaultValue={30} />
+          </Field>
+          <Field label="Frequência de dieta">
+            <Input name="dietFrequencyDays" type="number" min={1} defaultValue={30} />
+          </Field>
+          <Field label="Status">
+            <Select name="status" defaultValue="active">
+              <option value="active">Ativo</option>
+              <option value="inactive">Inativo</option>
+            </Select>
+          </Field>
+          <Field label="Observações"><Textarea name="notes" className="md:col-span-2" /></Field>
+          {state.message ? (
+            <p className={`rounded-lg px-3 py-2 text-sm font-semibold md:col-span-2 ${state.ok ? "bg-emerald/10 text-forest" : "bg-red-50 text-red-700"}`}>
+              {state.message}
+            </p>
+          ) : null}
+          <div className="md:col-span-2">
+            <Button type="submit" disabled={isPending} className="min-h-12 w-full md:w-auto">
+              {isPending ? "Cadastrando aluno..." : "Cadastrar aluno"}
+            </Button>
+          </div>
         </form>
       </Card>
       <Card>
