@@ -118,6 +118,11 @@ function formatTimer(seconds: number) {
   return `${minutes}:${rest}`;
 }
 
+function parsePrescribedSets(sets?: string) {
+  const value = Number(String(sets || "").match(/\d+/)?.[0] || "1");
+  return Number.isFinite(value) && value > 0 ? value : 1;
+}
+
 function splitLines(value: string) {
   return value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
 }
@@ -253,7 +258,7 @@ export function WorkoutBoard({
       coachId: workout.coachId
     }))
   );
-  const selectedWorkoutExercise = runtimeExercises.find((exercise) => exercise.id === selectedWorkoutExerciseId) || runtimeExercises[0];
+  const selectedWorkoutExercise = runtimeExercises.find((exercise) => exercise.id === selectedWorkoutExerciseId) || (readOnly ? undefined : runtimeExercises[0]);
   const detailExercise = selectedWorkoutExercise?.exercise || selectedExercise;
 
   function addDraft() {
@@ -455,14 +460,32 @@ export function WorkoutBoard({
   }
 
   if (readOnly) {
+    const todayWeekday = weekdays[(new Date().getDay() + 6) % 7];
+    const currentWorkout = workoutItems.find((workout) => workout.active) || workoutItems[0];
+    const todaysExercises = currentWorkout?.exercises.filter((exercise) => exercise.weekday === todayWeekday) || [];
+    const visibleExercises = todaysExercises.length ? todaysExercises : currentWorkout?.exercises || [];
+    const completedExerciseCount = visibleExercises.filter((exercise) => (completedSets[exercise.id] || 0) >= parsePrescribedSets(exercise.sets)).length;
+    const progress = visibleExercises.length ? Math.round((completedExerciseCount / visibleExercises.length) * 100) : 0;
+    const workoutFinished = visibleExercises.length > 0 && completedExerciseCount === visibleExercises.length;
+
     return (
-      <div className="mx-auto grid max-w-3xl gap-4 pb-24">
-        <section className="rounded-lg bg-forest p-5 text-white shadow-soft">
-          <p className="text-xs font-bold uppercase tracking-[0.18em] text-white/60">Treino de hoje</p>
-          <h2 className="mt-2 text-2xl font-black">{workoutItems[0]?.name || "Treino atual"}</h2>
-          <p className="mt-1 text-sm text-white/70">Abra o exercício, registre a série e siga o descanso.</p>
+      <div className="mx-auto grid max-w-3xl gap-4 pb-28 lg:pb-6">
+        <section className="rounded-lg bg-blue-600 p-5 text-white shadow-soft">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-white/70">Treino de hoje</p>
+              <h2 className="mt-2 text-3xl font-black">{currentWorkout?.name || "Nenhum treino disponível"}</h2>
+              <p className="mt-1 text-sm font-semibold text-white/78">
+                {visibleExercises.length ? `${completedExerciseCount} de ${visibleExercises.length} exercícios concluídos` : "Seu treino aparecerá aqui quando for cadastrado."}
+              </p>
+            </div>
+            {currentWorkout ? <span className="rounded-full bg-white/18 px-3 py-1 text-xs font-black text-white">{todaysExercises.length ? todayWeekday : "Atual"}</span> : null}
+          </div>
+          <div className="mt-5 h-3 overflow-hidden rounded-full bg-white/20">
+            <div className="h-full rounded-full bg-white transition-all" style={{ width: `${progress}%` }} />
+          </div>
           {timerSeconds > 0 ? (
-            <div className="mt-4 flex items-center justify-between rounded-lg bg-white/10 p-4">
+            <div className="mt-5 flex items-center justify-between rounded-lg bg-white/14 p-4">
               <div>
                 <span className="text-xs font-bold uppercase tracking-[0.14em] text-white/60">Descanso</span>
                 <strong className="mt-1 block text-4xl">{formatTimer(timerSeconds)}</strong>
@@ -472,75 +495,79 @@ export function WorkoutBoard({
               </Button>
             </div>
           ) : null}
+          {workoutFinished ? (
+            <div className="mt-5 rounded-lg bg-white p-4 text-blue-900">
+              <strong className="block text-xl">🎉 Treino concluído</strong>
+              <span className="mt-1 block text-sm font-semibold">Bom trabalho. Seu histórico foi registrado durante as séries concluídas.</span>
+            </div>
+          ) : null}
         </section>
 
-        {workoutItems.length ? workoutItems.map((workout) => (
-          <section key={workout.id} className="grid gap-4">
-            {weekdays.map((day) => {
-              const dayExercises = workout.exercises.filter((exercise) => exercise.weekday === day);
-              if (!dayExercises.length) return null;
+        {currentWorkout && visibleExercises.length ? (
+          <section className="grid gap-4">
+            {visibleExercises.map((exercise) => {
+              const runtimeExercise: RuntimeExercise = { ...exercise, workoutId: currentWorkout.id, workoutName: currentWorkout.name, studentId: currentWorkout.studentId, coachId: currentWorkout.coachId };
+              const done = completedSets[exercise.id] || 0;
+              const prescribedSets = parsePrescribedSets(exercise.sets);
+              const exerciseDone = done >= prescribedSets;
+
               return (
-                <Card key={day} className="p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="text-lg font-black text-forest">{day}</h3>
-                    <Badge tone="success">{dayExercises.length} exercícios</Badge>
+                <article
+                  key={exercise.id}
+                  className={`grid gap-3 rounded-lg border bg-white p-3 shadow-soft transition ${exerciseDone ? "border-emerald-200 bg-emerald-50" : "border-line"}`}
+                >
+                  <ExerciseImage exercise={exercise.exercise} className={exerciseDone ? "opacity-70" : ""} />
+                  <div className="grid gap-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <strong className="block text-2xl text-ink">{exercise.name}</strong>
+                        <span className="text-sm font-semibold text-zinc-500">{exercise.muscleGroup} · {exercise.exercise?.equipment || "Livre"}</span>
+                      </div>
+                      <Badge tone={exerciseDone ? "success" : "neutral"}>{exerciseDone ? "Concluído" : `${done}/${prescribedSets}`}</Badge>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                      <span className="rounded-lg bg-blue-50 p-3 font-semibold text-blue-900"><strong className="block text-xl">{exercise.sets}x{exercise.reps}</strong>Séries</span>
+                      <span className="rounded-lg bg-zinc-100 p-3 font-semibold text-zinc-800"><strong className="block text-xl">{exercise.load || "-"}</strong>Carga</span>
+                      <span className="rounded-lg bg-amber-50 p-3 font-semibold text-amber-900"><strong className="block text-xl">{exercise.rest || "-"}</strong>Descanso</span>
+                    </div>
+                    {exercise.coachNotes || exercise.notes ? (
+                      <p className="rounded-lg bg-mist p-3 text-sm font-semibold text-zinc-600">{exercise.coachNotes || exercise.notes}</p>
+                    ) : null}
+                    <div className="flex items-center gap-2 text-xs font-semibold text-zinc-500">
+                      <History className="h-4 w-4" /> Último treino: {lastLogLabel(exercise)}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button type="button" variant="secondary" className="min-h-12" onClick={() => setSelectedWorkoutExerciseId(exercise.id)}>
+                        <Eye className="h-4 w-4" /> Ver exercício
+                      </Button>
+                      {exercise.exercise?.videoUrl ? (
+                        <a className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-zinc-900 px-4 text-sm font-bold text-white" href={exercise.exercise.videoUrl} target="_blank">
+                          <PlayCircle className="h-4 w-4" /> Ver vídeo
+                        </a>
+                      ) : (
+                        <Button type="button" variant="secondary" className="min-h-12" disabled><PlayCircle className="h-4 w-4" /> Sem vídeo</Button>
+                      )}
+                      <Button type="button" variant="secondary" className="min-h-12" onClick={() => setSelectedWorkoutExerciseId(exercise.id)}>
+                        <Dumbbell className="h-4 w-4" /> Como fazer
+                      </Button>
+                      <Button type="button" className="min-h-12 bg-blue-600 hover:bg-blue-700" onClick={() => completeSet(runtimeExercise)} disabled={exerciseDone}>
+                        <CheckCircle2 className="h-4 w-4" /> {exerciseDone ? "Concluído" : "Concluir série"}
+                      </Button>
+                    </div>
                   </div>
-                  <div className="mt-4 grid gap-3">
-                    {dayExercises.map((exercise) => {
-                      const runtimeExercise: RuntimeExercise = { ...exercise, workoutId: workout.id, workoutName: workout.name, studentId: workout.studentId, coachId: workout.coachId };
-                      const done = completedSets[exercise.id] || 0;
-                      return (
-                        <article key={exercise.id} className="grid gap-3 rounded-lg border border-line bg-white p-3 shadow-sm">
-                          <ExerciseImage exercise={exercise.exercise} />
-                          <div className="grid gap-3">
-                            <div className="flex items-start justify-between gap-3">
-                              <div>
-                                <strong className="block text-xl">{exercise.name}</strong>
-                                <span className="text-sm text-zinc-500">{exercise.muscleGroup} · {exercise.exercise?.equipment || "Equipamento livre"}</span>
-                              </div>
-                              <Badge>{done >= Number(exercise.sets || 0) ? "Concluído" : "Pendente"}</Badge>
-                            </div>
-                            <div className="grid grid-cols-3 gap-2 text-center text-sm">
-                              <span className="rounded-lg bg-mist p-3"><strong className="block text-lg">{exercise.sets}x{exercise.reps}</strong>Séries</span>
-                              <span className="rounded-lg bg-mist p-3"><strong className="block text-lg">{exercise.load || "-"}</strong>Carga</span>
-                              <span className="rounded-lg bg-mist p-3"><strong className="block text-lg">{exercise.rest || "-"}</strong>Descanso</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-xs font-semibold text-zinc-500">
-                              <History className="h-4 w-4" /> Último treino: {lastLogLabel(exercise)}
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <Button type="button" variant="secondary" className="min-h-12" onClick={() => setSelectedWorkoutExerciseId(exercise.id)}>
-                                <Eye className="h-4 w-4" /> Ver exercício
-                              </Button>
-                              {exercise.exercise?.videoUrl ? (
-                                <a className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-forest px-4 text-sm font-bold text-white" href={exercise.exercise.videoUrl} target="_blank">
-                                  <PlayCircle className="h-4 w-4" /> Ver vídeo
-                                </a>
-                              ) : (
-                                <Button type="button" variant="secondary" className="min-h-12" disabled><PlayCircle className="h-4 w-4" /> Sem vídeo</Button>
-                              )}
-                              <Button type="button" variant="secondary" className="min-h-12" onClick={() => setSelectedWorkoutExerciseId(exercise.id)}>
-                                <Dumbbell className="h-4 w-4" /> Como fazer
-                              </Button>
-                              <Button type="button" className="min-h-12" onClick={() => completeSet(runtimeExercise)}>
-                                <CheckCircle2 className="h-4 w-4" /> Concluir série
-                              </Button>
-                            </div>
-                          </div>
-                        </article>
-                      );
-                    })}
-                  </div>
-                </Card>
+                </article>
               );
             })}
           </section>
-        )) : (
-          <Card><p className="text-sm font-semibold text-zinc-500">Nenhum treino ativo encontrado para este aluno.</p></Card>
+        ) : (
+          <Card className="p-6 text-center">
+            <Dumbbell className="mx-auto h-10 w-10 text-zinc-300" />
+            <p className="mt-3 text-sm font-semibold text-zinc-500">Nenhum treino disponível no momento.</p>
+          </Card>
         )}
 
         {selectedWorkoutExercise ? (
-          <Card className="sticky bottom-4 z-10 border-forest p-4 shadow-2xl">
+          <Card className="sticky bottom-24 z-10 border-blue-200 p-4 shadow-2xl lg:bottom-4">
             <div className="grid gap-4">
               <ExerciseImage exercise={detailExercise} />
               <div>
@@ -579,7 +606,7 @@ export function WorkoutBoard({
                   </div>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <Button type="button" onClick={() => completeSet(selectedWorkoutExercise)}>
+                  <Button type="button" className="min-h-12 bg-blue-600 hover:bg-blue-700" onClick={() => completeSet(selectedWorkoutExercise)}>
                     <CheckCircle2 className="h-4 w-4" /> Concluir série
                   </Button>
                   <Button type="button" variant="secondary" onClick={() => setTimerSeconds(parseRestSeconds(selectedWorkoutExercise.rest))}>
