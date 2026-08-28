@@ -14,6 +14,11 @@ export type StudentAccessState = {
   message: string;
 };
 
+export type StudentMutationState = {
+  ok: boolean;
+  message: string;
+};
+
 function getValue(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
@@ -26,6 +31,11 @@ function getPositiveInteger(formData: FormData, key: string, fallback: number) {
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+function getStudentStatus(formData: FormData) {
+  const status = getValue(formData, "status");
+  return status === "inactive" || status === "blocked" ? status : "active";
 }
 
 function isInvalidEmail(email: string) {
@@ -79,6 +89,11 @@ async function sendStudentPasswordAccess(admin: any, studentId: string, authUser
   return result;
 }
 
+function revalidateStudentViews() {
+  revalidatePath("/alunos");
+  revalidatePath("/dashboard");
+}
+
 export async function createStudentAction(_: CreateStudentState, formData: FormData): Promise<CreateStudentState> {
   const { profile: coach } = await getAppSession(["coach"]);
 
@@ -90,7 +105,7 @@ export async function createStudentAction(_: CreateStudentState, formData: FormD
   const joinedAt = getValue(formData, "joinedAt");
   const workoutFrequencyDays = getPositiveInteger(formData, "workoutFrequencyDays", 30);
   const dietFrequencyDays = getPositiveInteger(formData, "dietFrequencyDays", 30);
-  const status = getValue(formData, "status") === "inactive" ? "inactive" : "active";
+  const status = getStudentStatus(formData);
   const notes = getValue(formData, "notes");
 
   if (!fullName || !email) {
@@ -170,8 +185,7 @@ export async function createStudentAction(_: CreateStudentState, formData: FormD
     };
   }
 
-  revalidatePath("/alunos");
-  revalidatePath("/dashboard");
+  revalidateStudentViews();
 
   let accessEmailError: { message?: string } | null = null;
 
@@ -207,6 +221,232 @@ export async function createStudentAction(_: CreateStudentState, formData: FormD
     ok: true,
     message: "Aluno cadastrado com sucesso. O link para definir senha foi enviado por e-mail."
   };
+}
+
+export async function updateStudentAction(_: StudentMutationState, formData: FormData): Promise<StudentMutationState> {
+  const { profile: coach } = await getAppSession(["coach"]);
+
+  const studentId = getValue(formData, "studentId");
+  const fullName = getValue(formData, "fullName");
+  const email = normalizeEmail(getValue(formData, "email"));
+  const phone = getValue(formData, "phone");
+  const birthDate = getValue(formData, "birthDate");
+  const goal = getValue(formData, "goal");
+  const joinedAt = getValue(formData, "joinedAt");
+  const workoutFrequencyDays = getPositiveInteger(formData, "workoutFrequencyDays", 30);
+  const dietFrequencyDays = getPositiveInteger(formData, "dietFrequencyDays", 30);
+  const status = getStudentStatus(formData);
+  const notes = getValue(formData, "notes");
+
+  if (!studentId || !fullName || !email) {
+    return { ok: false, message: "Informe aluno, nome completo e e-mail para salvar as alterações." };
+  }
+
+  if (isInvalidEmail(email)) {
+    return { ok: false, message: "Informe um e-mail válido para salvar o aluno." };
+  }
+
+  const admin = createAdminClient() as any;
+  const { data: currentStudent, error: currentStudentError } = await admin
+    .from("students")
+    .select("id, coach_id, auth_user_id, email")
+    .eq("id", studentId)
+    .eq("coach_id", coach.id)
+    .maybeSingle();
+
+  if (currentStudentError) return { ok: false, message: "Nao foi possivel localizar o aluno para edição." };
+  if (!currentStudent) return { ok: false, message: "Aluno não encontrado ou não pertence ao Coach autenticado." };
+  if (!currentStudent.auth_user_id) return { ok: false, message: "Este aluno não possui usuário de acesso vinculado." };
+
+  const { data: existingProfile, error: existingProfileError } = await admin
+    .from("profiles")
+    .select("id")
+    .eq("email", email)
+    .neq("id", currentStudent.auth_user_id)
+    .maybeSingle();
+
+  if (existingProfileError) return { ok: false, message: "Nao foi possivel validar o e-mail informado." };
+  if (existingProfile) return { ok: false, message: "Ja existe outro acesso cadastrado com este e-mail." };
+
+  const { data: existingStudent, error: existingStudentError } = await admin
+    .from("students")
+    .select("id")
+    .eq("email", email)
+    .neq("id", studentId)
+    .maybeSingle();
+
+  if (existingStudentError) return { ok: false, message: "Nao foi possivel validar o e-mail do aluno." };
+  if (existingStudent) return { ok: false, message: "Ja existe outro aluno cadastrado com este e-mail." };
+
+  const { data: authUserData, error: authUserError } = await admin.auth.admin.getUserById(currentStudent.auth_user_id);
+
+  if (authUserError || !authUserData?.user) {
+    return { ok: false, message: "Usuário de autenticação do aluno não encontrado. Verifique o vínculo antes de editar." };
+  }
+
+  const previousAuthEmail = normalizeEmail(authUserData.user.email || currentStudent.email || "");
+  const emailChanged = previousAuthEmail !== email;
+
+  if (emailChanged) {
+    const { error: authUpdateError } = await admin.auth.admin.updateUserById(currentStudent.auth_user_id, {
+      email,
+      email_confirm: true,
+      user_metadata: { full_name: fullName, role: "student", coach_id: coach.id }
+    });
+
+    if (authUpdateError) {
+      return { ok: false, message: "Nao foi possivel atualizar o e-mail no Supabase Auth. Verifique se o e-mail ja esta em uso." };
+    }
+  } else {
+    await admin.auth.admin.updateUserById(currentStudent.auth_user_id, {
+      user_metadata: { full_name: fullName, role: "student", coach_id: coach.id }
+    });
+  }
+
+  const { error: profileError } = await admin
+    .from("profiles")
+    .update({
+      full_name: fullName,
+      email,
+      phone: phone || null,
+      status,
+      coach_id: coach.id,
+      notes: notes || null
+    })
+    .eq("id", currentStudent.auth_user_id)
+    .eq("role", "student")
+    .eq("coach_id", coach.id);
+
+  if (profileError) {
+    if (emailChanged && previousAuthEmail) {
+      await admin.auth.admin.updateUserById(currentStudent.auth_user_id, { email: previousAuthEmail, email_confirm: true });
+    }
+
+    return {
+      ok: false,
+      message: "Nao foi possivel salvar o profile. Se o e-mail foi alterado, o sistema tentou restaurar o e-mail anterior no Auth."
+    };
+  }
+
+  const { error: studentError } = await admin
+    .from("students")
+    .update({
+      name: fullName,
+      email,
+      phone: phone || null,
+      birth_date: birthDate || null,
+      goal: goal || null,
+      status,
+      notes: notes || null,
+      joined_at: joinedAt || new Date().toISOString().slice(0, 10),
+      diet_frequency_days: dietFrequencyDays,
+      workout_frequency_days: workoutFrequencyDays
+    })
+    .eq("id", studentId)
+    .eq("coach_id", coach.id)
+    .eq("auth_user_id", currentStudent.auth_user_id);
+
+  if (studentError) {
+    await admin
+      .from("profiles")
+      .update({ email: previousAuthEmail || currentStudent.email })
+      .eq("id", currentStudent.auth_user_id)
+      .eq("role", "student")
+      .eq("coach_id", coach.id);
+
+    if (emailChanged && previousAuthEmail) {
+      await admin.auth.admin.updateUserById(currentStudent.auth_user_id, { email: previousAuthEmail, email_confirm: true });
+    }
+
+    return {
+      ok: false,
+      message: "Nao foi possivel salvar o aluno. Se o e-mail foi alterado, o sistema tentou restaurar o e-mail anterior."
+    };
+  }
+
+  revalidateStudentViews();
+  return { ok: true, message: "Aluno atualizado com sucesso." };
+}
+
+export async function deleteStudentAction(_: StudentMutationState, formData: FormData): Promise<StudentMutationState> {
+  const { profile: coach } = await getAppSession(["coach"]);
+  const studentId = getValue(formData, "studentId");
+
+  if (!studentId) return { ok: false, message: "Aluno não informado." };
+
+  const admin = createAdminClient() as any;
+  const { data: student, error: studentError } = await admin
+    .from("students")
+    .select("id, coach_id, auth_user_id, email")
+    .eq("id", studentId)
+    .eq("coach_id", coach.id)
+    .maybeSingle();
+
+  if (studentError) return { ok: false, message: "Nao foi possivel localizar o aluno para exclusão." };
+  if (!student) return { ok: false, message: "Aluno não encontrado ou não pertence ao Coach autenticado." };
+
+  const authUserId = student.auth_user_id;
+  const failMessage = "Nao foi possivel excluir o aluno. Nenhuma exclusão ampla foi executada.";
+
+  const { data: workouts } = await admin.from("workouts").select("id").eq("student_id", student.id).eq("coach_id", coach.id);
+  const workoutIds = (workouts || []).map((workout: { id: string }) => workout.id);
+  if (workoutIds.length) {
+    const { error } = await admin.from("workout_exercise_logs").delete().eq("student_id", student.id).eq("coach_id", coach.id);
+    if (error) return { ok: false, message: failMessage };
+
+    const feedbackDelete = await admin.from("workout_feedbacks").delete().eq("student_id", student.id).eq("coach_id", coach.id);
+    if (feedbackDelete.error) return { ok: false, message: failMessage };
+
+    const exercisesDelete = await admin.from("workout_exercises").delete().in("workout_id", workoutIds);
+    if (exercisesDelete.error) return { ok: false, message: failMessage };
+  }
+
+  const { data: diets } = await admin.from("diets").select("id").eq("student_id", student.id).eq("coach_id", coach.id);
+  const dietIds = (diets || []).map((diet: { id: string }) => diet.id);
+  if (dietIds.length) {
+    const { error } = await admin.from("diet_meals").delete().in("diet_id", dietIds);
+    if (error) return { ok: false, message: failMessage };
+  }
+
+  const { data: assessments } = await admin.from("assessments").select("id").eq("student_id", student.id).eq("coach_id", coach.id);
+  const assessmentIds = (assessments || []).map((assessment: { id: string }) => assessment.id);
+  if (assessmentIds.length) {
+    const { error } = await admin.from("assessment_photos").delete().in("assessment_id", assessmentIds);
+    if (error) return { ok: false, message: failMessage };
+  }
+
+  const dependentDeletes = [
+    admin.from("messages").delete().eq("student_id", student.id).eq("coach_id", coach.id),
+    admin.from("smart_alerts").delete().eq("student_id", student.id).eq("coach_id", coach.id),
+    admin.from("hormonal_protocols").delete().eq("student_id", student.id).eq("coach_id", coach.id),
+    admin.from("assessments").delete().eq("student_id", student.id).eq("coach_id", coach.id),
+    admin.from("diets").delete().eq("student_id", student.id).eq("coach_id", coach.id),
+    admin.from("workouts").delete().eq("student_id", student.id).eq("coach_id", coach.id)
+  ];
+
+  for (const result of await Promise.all(dependentDeletes)) {
+    if (result.error) return { ok: false, message: failMessage };
+  }
+
+  const studentDelete = await admin.from("students").delete().eq("id", student.id).eq("coach_id", coach.id);
+  if (studentDelete.error) return { ok: false, message: failMessage };
+
+  if (authUserId) {
+    const profileDelete = await admin
+      .from("profiles")
+      .delete()
+      .eq("id", authUserId)
+      .eq("role", "student")
+      .eq("coach_id", coach.id);
+
+    if (profileDelete.error) return { ok: false, message: "Aluno removido, mas não foi possível remover o profile de acesso." };
+
+    const { error: authDeleteError } = await admin.auth.admin.deleteUser(authUserId);
+    if (authDeleteError) return { ok: false, message: "Aluno removido, mas não foi possível remover o usuário no Supabase Auth." };
+  }
+
+  revalidateStudentViews();
+  return { ok: true, message: "Aluno excluído com sucesso." };
 }
 
 export async function resendStudentAccessAction(_: StudentAccessState, formData: FormData): Promise<StudentAccessState> {
