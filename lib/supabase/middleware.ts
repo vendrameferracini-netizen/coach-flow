@@ -85,7 +85,7 @@ export async function updateSession(request: NextRequest) {
     return redirectTo("/login?error=profile_not_linked");
   }
 
-  if (profile && isUserRole(profile.role) && isAuthRoute) {
+  if (profile && isUserRole(profile.role) && isAuthRoute && pathname !== "/update-password") {
     return redirectTo(getDashboardPathByRole(profile.role));
   }
 

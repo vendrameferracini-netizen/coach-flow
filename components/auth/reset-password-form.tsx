@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
@@ -32,8 +33,16 @@ export function ForgotPasswordForm() {
 
 export function UpdatePasswordForm() {
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"success" | "error" | "neutral">("neutral");
   const [ready, setReady] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+
+  function showInvalidLinkMessage() {
+    setMessageTone("error");
+    setMessage("Link expirado ou inválido. Solicite um novo acesso.");
+    setReady(false);
+  }
 
   useEffect(() => {
     async function prepareRecoverySession() {
@@ -42,22 +51,57 @@ export function UpdatePasswordForm() {
       const errorCode = params.get("error_code") || hashParams.get("error_code") || params.get("error") || hashParams.get("error");
 
       if (errorCode) {
-        setMessage("Link expirado ou inválido. Solicite um novo acesso.");
-        setReady(false);
+        showInvalidLinkMessage();
         return;
       }
 
-      const code = params.get("code");
+      const supabase = createClient();
+      const type = params.get("type") || hashParams.get("type");
+      const code = params.get("code") || hashParams.get("code");
+      const tokenHash = params.get("token_hash") || hashParams.get("token_hash");
+      const accessToken = hashParams.get("access_token") || params.get("access_token");
+      const refreshToken = hashParams.get("refresh_token") || params.get("refresh_token");
+
+      setMessageTone("neutral");
+      setMessage("Validando link de acesso...");
+
+      if (type && type !== "recovery") {
+        showInvalidLinkMessage();
+        return;
+      }
+
       if (code) {
-        const supabase = createClient();
         const { error } = await supabase.auth.exchangeCodeForSession(code);
         if (error) {
-          setMessage("Link expirado ou inválido. Solicite um novo acesso.");
-          setReady(false);
+          showInvalidLinkMessage();
+          return;
+        }
+      } else if (tokenHash) {
+        const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: "recovery" });
+        if (error) {
+          showInvalidLinkMessage();
+          return;
+        }
+      } else if (accessToken && refreshToken) {
+        const { error } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken
+        });
+        if (error) {
+          showInvalidLinkMessage();
           return;
         }
       }
 
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData.user) {
+        showInvalidLinkMessage();
+        return;
+      }
+
+      window.history.replaceState(null, "", "/update-password");
+      setMessage("");
+      setMessageTone("neutral");
       setReady(true);
     }
 
@@ -69,16 +113,31 @@ export function UpdatePasswordForm() {
       const password = String(formData.get("password") || "");
       const supabase = createClient();
       const { error } = await supabase.auth.updateUser({ password });
-      setMessage(error ? "Link expirado ou inválido. Solicite um novo acesso." : "Senha alterada com sucesso.");
+      if (error) {
+        showInvalidLinkMessage();
+        return;
+      }
+
+      await supabase.auth.signOut();
+      setMessageTone("success");
+      setMessage("Senha alterada com sucesso. Redirecionando para o login...");
+      setReady(false);
+      router.replace("/login");
     });
   }
+
+  const messageClassName = {
+    success: "bg-emerald/10 text-emerald",
+    error: "bg-red-50 text-red-700",
+    neutral: "bg-mist text-zinc-600"
+  }[messageTone];
 
   return (
     <form action={handleSubmit} className="grid gap-4">
       <Field label="Nova senha">
         <Input name="password" type="password" minLength={8} autoComplete="new-password" required />
       </Field>
-      {message ? <p className="rounded-lg bg-emerald/10 px-3 py-2 text-sm font-semibold text-emerald">{message}</p> : null}
+      {message ? <p className={`rounded-lg px-3 py-2 text-sm font-semibold ${messageClassName}`}>{message}</p> : null}
       <Button type="submit" disabled={isPending || !ready}>{isPending ? "Salvando..." : "Alterar senha"}</Button>
     </form>
   );
