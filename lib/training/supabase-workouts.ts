@@ -67,7 +67,8 @@ function mapLog(row: AnyRow): WorkoutExerciseLog {
 }
 
 function mapWorkoutExercise(row: AnyRow): WorkoutExercise {
-  const exercise = row.exercise_library ? mapExercise(row.exercise_library) : undefined;
+  const exerciseRow = row.exercise || row.exercise_library;
+  const exercise = exerciseRow ? mapExercise(exerciseRow) : undefined;
   const logs = (row.workout_exercise_logs || [])
     .map(mapLog)
     .sort((a: WorkoutExerciseLog, b: WorkoutExerciseLog) => new Date(b.performedAt).getTime() - new Date(a.performedAt).getTime());
@@ -158,7 +159,7 @@ export async function getTrainingWorkspace(profile: Profile): Promise<TrainingWo
       *,
       workout_exercises (
         *,
-        exercise_library (*),
+        exercise:exercise_library!workout_exercises_exercise_id_fkey (*),
         workout_exercise_logs (*)
       )
     `)
