@@ -44,7 +44,7 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
             <Badge tone="warning">{data.alerts.length} pendentes</Badge>
           </div>
           <div className="mt-5 grid gap-3">
-            {data.alerts.map((alert) => (
+            {data.alerts.length ? data.alerts.map((alert) => (
               <div key={alert.id} className="grid gap-3 rounded-lg border border-line p-4 md:grid-cols-[1fr_auto] md:items-center">
                 <div className="flex items-start gap-3">
                   <div className="grid h-10 w-10 place-items-center rounded-lg bg-amber-100 text-amber-800">
@@ -63,7 +63,7 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
                   <Button variant="secondary">Adiar</Button>
                 </div>
               </div>
-            ))}
+            )) : <p className="rounded-lg border border-line p-4 text-sm font-semibold text-zinc-500">Nenhum alerta para hoje.</p>}
           </div>
         </Card>
 
@@ -109,7 +109,7 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
               </tr>
             </thead>
             <tbody>
-              {data.students.map((student) => (
+              {data.students.length ? data.students.map((student) => (
                 <tr key={student.id} className="border-t border-line">
                   <td className="py-3 font-bold">{student.name}</td>
                   <td>{student.goal}</td>
@@ -117,7 +117,11 @@ export function CoachDashboard({ data }: { data: CoachDashboardData }) {
                   <td><Badge tone="success">Ativo</Badge></td>
                   <td>{formatDate(student.joinedAt)}</td>
                 </tr>
-              ))}
+              )) : (
+                <tr className="border-t border-line">
+                  <td className="py-4 text-sm font-semibold text-zinc-500" colSpan={5}>Nenhum aluno cadastrado.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

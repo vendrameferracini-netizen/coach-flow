@@ -34,7 +34,7 @@ export function StudentList({ students }: { students: Student[] }) {
               <tr><th className="py-3">Aluno</th><th>Objetivo</th><th>Nível</th><th>Status</th><th>Entrada</th><th></th></tr>
             </thead>
             <tbody>
-              {students.map((student) => (
+              {students.length ? students.map((student) => (
                 <tr key={student.id} className="border-t border-line">
                   <td className="py-3 font-bold">{student.name}<span className="block text-xs font-medium text-zinc-500">{student.email}</span></td>
                   <td>{student.goal}</td>
@@ -43,7 +43,11 @@ export function StudentList({ students }: { students: Student[] }) {
                   <td>{formatDate(student.joinedAt)}</td>
                   <td className="text-right"><Button variant="secondary" type="button">Editar</Button></td>
                 </tr>
-              ))}
+              )) : (
+                <tr className="border-t border-line">
+                  <td className="py-4 text-sm font-semibold text-zinc-500" colSpan={6}>Nenhum aluno cadastrado.</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

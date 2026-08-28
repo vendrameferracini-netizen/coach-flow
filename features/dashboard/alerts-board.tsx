@@ -21,7 +21,7 @@ export function AlertsBoard({ alerts }: { alerts: SmartAlert[] }) {
       </div>
       <p className="mt-1 text-sm text-zinc-500">Concluir recalcula o próximo vencimento com base na frequência do aluno.</p>
       <div className="mt-5 grid gap-3">
-        {alerts.map((alert) => (
+        {alerts.length ? alerts.map((alert) => (
           <div key={alert.id} className="grid gap-3 rounded-lg border border-line p-4 md:grid-cols-[1fr_auto] md:items-center">
             <div>
               <div className="flex flex-wrap items-center gap-2">
@@ -36,7 +36,7 @@ export function AlertsBoard({ alerts }: { alerts: SmartAlert[] }) {
               <Button variant="secondary" type="button">Adiar</Button>
             </div>
           </div>
-        ))}
+        )) : <p className="rounded-lg border border-line p-4 text-sm font-semibold text-zinc-500">Nenhum alerta para hoje.</p>}
       </div>
     </Card>
   );

@@ -2,16 +2,22 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/input";
 import { calculateBmi, formatDate } from "@/lib/utils";
-import type { Assessment } from "@/types/domain";
+import type { Assessment, Student } from "@/types/domain";
 
-export function AssessmentBoard({ assessments, readOnly = false }: { assessments: Assessment[]; readOnly?: boolean }) {
+export function AssessmentBoard({ assessments, students = [], readOnly = false }: { assessments: Assessment[]; students?: Student[]; readOnly?: boolean }) {
   return (
     <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
       {!readOnly ? (
         <Card>
           <h2 className="text-xl font-black">Registrar avaliação</h2>
           <form className="mt-5 grid gap-4 md:grid-cols-2">
-            <Field label="Aluno"><Select><option>Lucas Andrade</option></Select></Field>
+            <Field label="Aluno">
+              <Select disabled={!students.length}>
+                {students.length ? students.map((student) => (
+                  <option key={student.id} value={student.id}>{student.name}</option>
+                )) : <option>Nenhum aluno cadastrado</option>}
+              </Select>
+            </Field>
             <Field label="Peso"><Input type="number" placeholder="82" /></Field>
             <Field label="Altura"><Input placeholder="1.78" /></Field>
             <Field label="Percentual de gordura"><Input placeholder="16.8" /></Field>
@@ -24,7 +30,7 @@ export function AssessmentBoard({ assessments, readOnly = false }: { assessments
         </Card>
       ) : null}
       <div className="grid gap-4">
-        {assessments.map((assessment) => (
+        {assessments.length ? assessments.map((assessment) => (
           <Card key={assessment.id}>
             <h3 className="text-xl font-black">{formatDate(assessment.assessedAt)}</h3>
             <div className="mt-4 grid gap-3 md:grid-cols-4">
@@ -35,7 +41,7 @@ export function AssessmentBoard({ assessments, readOnly = false }: { assessments
             </div>
             <p className="mt-4 text-sm text-zinc-500">{assessment.notes}</p>
           </Card>
-        ))}
+        )) : <Card><p className="text-sm font-semibold text-zinc-500">Nenhuma avaliação cadastrada.</p></Card>}
       </div>
     </div>
   );

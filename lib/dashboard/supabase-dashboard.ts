@@ -160,6 +160,30 @@ export async function getRealSuperAdminDashboard() {
   };
 }
 
+export async function getRealCoachProfiles(): Promise<Profile[]> {
+  const supabase = await createClient() as any;
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("role", "coach")
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return ((data || []) as AnyRow[]).map(mapProfile);
+}
+
+export async function getRealStudentsForCoach(profile: Profile): Promise<Student[]> {
+  const supabase = await createClient() as any;
+  const { data, error } = await supabase
+    .from("students")
+    .select("*")
+    .eq("coach_id", profile.id)
+    .order("name");
+
+  if (error) throw error;
+  return ((data || []) as AnyRow[]).map(mapStudent);
+}
+
 export async function getRealCoachDashboard(profile: Profile): Promise<CoachDashboardData> {
   const supabase = await createClient() as any;
   const [{ data: students, error: studentsError }, { data: workouts, error: workoutsError }, { data: diets, error: dietsError }, { data: assessments, error: assessmentsError }, { data: protocols, error: protocolsError }, { data: messages, error: messagesError }, { data: alerts, error: alertsError }] = await Promise.all([
@@ -214,4 +238,141 @@ export async function getRealStudentDashboard(profile: Profile) {
     protocols: ((protocols || []) as AnyRow[]).map(mapProtocol),
     messages: ((messages || []) as AnyRow[]).map(mapMessage)
   };
+}
+
+async function getRealStudentForProfile(profile: Profile): Promise<Student | null> {
+  const supabase = await createClient() as any;
+  const { data, error } = await supabase
+    .from("students")
+    .select("*")
+    .eq("auth_user_id", profile.id)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapStudent(data as AnyRow) : null;
+}
+
+export async function getRealDietsForProfile(profile: Profile): Promise<{ diets: Diet[]; students: Student[] }> {
+  const supabase = await createClient() as any;
+
+  if (profile.role === "student") {
+    const student = await getRealStudentForProfile(profile);
+    if (!student) return { diets: [], students: [] };
+
+    const { data, error } = await supabase
+      .from("diets")
+      .select("*, diet_meals (*)")
+      .eq("student_id", student.id)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    return { diets: ((data || []) as AnyRow[]).map(mapDiet), students: [student] };
+  }
+
+  const students = await getRealStudentsForCoach(profile);
+  const { data, error } = await supabase
+    .from("diets")
+    .select("*, diet_meals (*)")
+    .eq("coach_id", profile.id)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return { diets: ((data || []) as AnyRow[]).map(mapDiet), students };
+}
+
+export async function getRealAssessmentsForProfile(profile: Profile): Promise<{ assessments: Assessment[]; students: Student[] }> {
+  const supabase = await createClient() as any;
+
+  if (profile.role === "student") {
+    const student = await getRealStudentForProfile(profile);
+    if (!student) return { assessments: [], students: [] };
+
+    const { data, error } = await supabase
+      .from("assessments")
+      .select("*, assessment_photos (*)")
+      .eq("student_id", student.id)
+      .order("assessed_at", { ascending: false });
+
+    if (error) throw error;
+    return { assessments: ((data || []) as AnyRow[]).map(mapAssessment), students: [student] };
+  }
+
+  const students = await getRealStudentsForCoach(profile);
+  const { data, error } = await supabase
+    .from("assessments")
+    .select("*, assessment_photos (*)")
+    .eq("coach_id", profile.id)
+    .order("assessed_at", { ascending: false });
+
+  if (error) throw error;
+  return { assessments: ((data || []) as AnyRow[]).map(mapAssessment), students };
+}
+
+export async function getRealProtocolsForProfile(profile: Profile): Promise<{ protocols: HormonalProtocol[]; students: Student[] }> {
+  const supabase = await createClient() as any;
+
+  if (profile.role === "student") {
+    const student = await getRealStudentForProfile(profile);
+    if (!student) return { protocols: [], students: [] };
+
+    const { data, error } = await supabase
+      .from("hormonal_protocols")
+      .select("*")
+      .eq("student_id", student.id)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    return { protocols: ((data || []) as AnyRow[]).map(mapProtocol), students: [student] };
+  }
+
+  const students = await getRealStudentsForCoach(profile);
+  const { data, error } = await supabase
+    .from("hormonal_protocols")
+    .select("*")
+    .eq("coach_id", profile.id)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return { protocols: ((data || []) as AnyRow[]).map(mapProtocol), students };
+}
+
+export async function getRealMessagesForProfile(profile: Profile): Promise<{ messages: Message[]; students: Student[] }> {
+  const supabase = await createClient() as any;
+
+  if (profile.role === "student") {
+    const student = await getRealStudentForProfile(profile);
+    if (!student) return { messages: [], students: [] };
+
+    const { data, error } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("student_id", student.id)
+      .order("sent_at", { ascending: false });
+
+    if (error) throw error;
+    return { messages: ((data || []) as AnyRow[]).map(mapMessage), students: [student] };
+  }
+
+  const students = await getRealStudentsForCoach(profile);
+  const { data, error } = await supabase
+    .from("messages")
+    .select("*")
+    .eq("coach_id", profile.id)
+    .order("sent_at", { ascending: false });
+
+  if (error) throw error;
+  return { messages: ((data || []) as AnyRow[]).map(mapMessage), students };
+}
+
+export async function getRealAlertsForCoach(profile: Profile): Promise<SmartAlert[]> {
+  const supabase = await createClient() as any;
+  const { data, error } = await supabase
+    .from("smart_alerts")
+    .select("*, students (name)")
+    .eq("coach_id", profile.id)
+    .eq("status", "pending")
+    .order("due_at");
+
+  if (error) throw error;
+  return ((data || []) as AnyRow[]).map(mapAlert);
 }
