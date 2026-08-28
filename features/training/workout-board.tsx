@@ -131,6 +131,17 @@ function joinLines(value?: string[]) {
   return (value || []).join("\n");
 }
 
+function isValidHttpUrl(value: string) {
+  if (!value) return true;
+
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function ExerciseImage({ exercise, className = "" }: { exercise?: ExerciseLibraryItem; className?: string }) {
   if (!exercise?.coverUrl) {
     return (
@@ -303,6 +314,16 @@ export function WorkoutBoard({
   async function saveExercise() {
     if (!exerciseForm.name || !exerciseForm.muscleGroup) {
       setStatus("Informe pelo menos nome e grupo muscular do exercício.");
+      return;
+    }
+
+    if (!isValidHttpUrl(exerciseForm.coverUrl)) {
+      setStatus("Informe uma URL válida para a foto do exercício.");
+      return;
+    }
+
+    if (!isValidHttpUrl(exerciseForm.videoUrl)) {
+      setStatus("Informe uma URL válida para o vídeo do exercício.");
       return;
     }
 
@@ -516,7 +537,7 @@ export function WorkoutBoard({
                   key={exercise.id}
                   className={`grid gap-3 rounded-lg border bg-white p-3 shadow-soft transition ${exerciseDone ? "border-emerald-200 bg-emerald-50" : "border-line"}`}
                 >
-                  <ExerciseImage exercise={exercise.exercise} className={exerciseDone ? "opacity-70" : ""} />
+                  {exercise.exercise?.coverUrl ? <ExerciseImage exercise={exercise.exercise} className={exerciseDone ? "opacity-70" : ""} /> : null}
                   <div className="grid gap-3">
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -541,12 +562,10 @@ export function WorkoutBoard({
                         <Eye className="h-4 w-4" /> Ver exercício
                       </Button>
                       {exercise.exercise?.videoUrl ? (
-                        <a className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-zinc-900 px-4 text-sm font-bold text-white" href={exercise.exercise.videoUrl} target="_blank">
+                        <a className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg bg-zinc-900 px-4 text-sm font-bold text-white" href={exercise.exercise.videoUrl} target="_blank" rel="noreferrer">
                           <PlayCircle className="h-4 w-4" /> Ver vídeo
                         </a>
-                      ) : (
-                        <Button type="button" variant="secondary" className="min-h-12" disabled><PlayCircle className="h-4 w-4" /> Sem vídeo</Button>
-                      )}
+                      ) : null}
                       <Button type="button" variant="secondary" className="min-h-12" onClick={() => setSelectedWorkoutExerciseId(exercise.id)}>
                         <Dumbbell className="h-4 w-4" /> Como fazer
                       </Button>
@@ -569,27 +588,38 @@ export function WorkoutBoard({
         {selectedWorkoutExercise ? (
           <Card className="sticky bottom-24 z-10 border-blue-200 p-4 shadow-2xl lg:bottom-4">
             <div className="grid gap-4">
-              <ExerciseImage exercise={detailExercise} />
+              {detailExercise?.coverUrl ? <ExerciseImage exercise={detailExercise} /> : null}
               <div>
                 <h3 className="text-xl font-black">{selectedWorkoutExercise.name}</h3>
-                <p className="mt-1 text-sm text-zinc-500">{detailExercise?.description || selectedWorkoutExercise.coachNotes}</p>
+                {detailExercise?.description || selectedWorkoutExercise.coachNotes ? (
+                  <p className="mt-1 text-sm text-zinc-500">{detailExercise?.description || selectedWorkoutExercise.coachNotes}</p>
+                ) : null}
+                {detailExercise?.videoUrl ? (
+                  <a className="mt-4 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-zinc-900 px-4 text-sm font-bold text-white sm:w-auto" href={detailExercise.videoUrl} target="_blank" rel="noreferrer">
+                    <PlayCircle className="h-4 w-4" /> Ver vídeo
+                  </a>
+                ) : null}
                 <div className="mt-4 grid gap-3 md:grid-cols-3">
                   <Field label="Carga usada"><Input value={loadByExercise[selectedWorkoutExercise.id] || ""} onChange={(event) => setLoadByExercise((current) => ({ ...current, [selectedWorkoutExercise.id]: event.target.value }))} placeholder={selectedWorkoutExercise.load || "kg"} /></Field>
                   <Field label="Repetições"><Input value={repsByExercise[selectedWorkoutExercise.id] || ""} onChange={(event) => setRepsByExercise((current) => ({ ...current, [selectedWorkoutExercise.id]: event.target.value }))} placeholder={selectedWorkoutExercise.reps} /></Field>
                   <Field label="Observação"><Input value={notesByExercise[selectedWorkoutExercise.id] || ""} onChange={(event) => setNotesByExercise((current) => ({ ...current, [selectedWorkoutExercise.id]: event.target.value }))} placeholder="Como foi?" /></Field>
                 </div>
-                <div className="mt-4 grid gap-2">
-                  <strong>Como fazer</strong>
-                  <ul className="grid gap-1 text-sm text-zinc-600">
-                    {(detailExercise?.executionSteps || []).map((step) => <li key={step}>• {step}</li>)}
-                  </ul>
-                </div>
-                <div className="mt-4 grid gap-2">
-                  <strong>Dicas rápidas</strong>
-                  <div className="grid gap-2 text-sm text-zinc-600">
-                    {(detailExercise?.executionTips || []).slice(0, 3).map((tip) => <span key={tip} className="rounded-lg bg-mist p-2">{tip}</span>)}
+                {detailExercise?.executionSteps?.length ? (
+                  <div className="mt-4 grid gap-2">
+                    <strong>Como fazer</strong>
+                    <ul className="grid gap-1 text-sm text-zinc-600">
+                      {detailExercise.executionSteps.map((step) => <li key={step}>• {step}</li>)}
+                    </ul>
                   </div>
-                </div>
+                ) : null}
+                {detailExercise?.executionTips?.length ? (
+                  <div className="mt-4 grid gap-2">
+                    <strong>Dicas rápidas</strong>
+                    <div className="grid gap-2 text-sm text-zinc-600">
+                      {detailExercise.executionTips.slice(0, 3).map((tip) => <span key={tip} className="rounded-lg bg-mist p-2">{tip}</span>)}
+                    </div>
+                  </div>
+                ) : null}
                 <div className="mt-4 grid gap-2">
                   <strong>Feedback</strong>
                   <div className="grid grid-cols-3 gap-2">
@@ -669,15 +699,16 @@ export function WorkoutBoard({
 
         <Card>
           <h2 className="text-xl font-black">{exerciseForm.id ? "Editar exercício próprio" : "Novo exercício próprio"}</h2>
+          <p className="mt-1 text-sm text-zinc-500">Cadastre foto por URL e link de vídeo demonstrativo. Séries, repetições, carga e descanso ficam na prescrição do treino.</p>
           <div className="mt-5 grid gap-4 md:grid-cols-2">
-            <Field label="Nome"><Input value={exerciseForm.name} onChange={(event) => setExerciseForm((current) => ({ ...current, name: event.target.value }))} placeholder="Agachamento livre" /></Field>
+            <Field label="Nome do exercício"><Input value={exerciseForm.name} onChange={(event) => setExerciseForm((current) => ({ ...current, name: event.target.value }))} placeholder="Agachamento livre" /></Field>
             <Field label="Grupo muscular"><Input value={exerciseForm.muscleGroup} onChange={(event) => setExerciseForm((current) => ({ ...current, muscleGroup: event.target.value }))} placeholder="Pernas" /></Field>
             <Field label="Subgrupo"><Input value={exerciseForm.muscleSubgroup} onChange={(event) => setExerciseForm((current) => ({ ...current, muscleSubgroup: event.target.value }))} placeholder="Quadríceps e glúteos" /></Field>
             <Field label="Equipamento"><Input value={exerciseForm.equipment} onChange={(event) => setExerciseForm((current) => ({ ...current, equipment: event.target.value }))} placeholder="Barra, halteres, polia" /></Field>
             <Field label="Categoria"><Input value={exerciseForm.category} onChange={(event) => setExerciseForm((current) => ({ ...current, category: event.target.value }))} placeholder="Força, cardio, mobilidade" /></Field>
             <Field label="Nível"><Select value={exerciseForm.difficulty} onChange={(event) => setExerciseForm((current) => ({ ...current, difficulty: event.target.value as ExerciseForm["difficulty"] }))}><option value="iniciante">Iniciante</option><option value="intermediario">Intermediário</option><option value="avancado">Avançado</option></Select></Field>
-            <Field label="URL da imagem"><Input value={exerciseForm.coverUrl} onChange={(event) => setExerciseForm((current) => ({ ...current, coverUrl: event.target.value }))} placeholder="https://..." /></Field>
-            <Field label="URL do vídeo"><Input value={exerciseForm.videoUrl} onChange={(event) => setExerciseForm((current) => ({ ...current, videoUrl: event.target.value }))} placeholder="YouTube, Vimeo ou storage" /></Field>
+            <Field label="Foto do exercício (URL)"><Input type="url" value={exerciseForm.coverUrl} onChange={(event) => setExerciseForm((current) => ({ ...current, coverUrl: event.target.value }))} placeholder="https://exemplo.com/foto.jpg" /></Field>
+            <Field label="Link do vídeo"><Input type="url" value={exerciseForm.videoUrl} onChange={(event) => setExerciseForm((current) => ({ ...current, videoUrl: event.target.value }))} placeholder="YouTube, Vimeo ou outro link válido" /></Field>
             <Field label="Descrição"><Textarea value={exerciseForm.description} onChange={(event) => setExerciseForm((current) => ({ ...current, description: event.target.value }))} /></Field>
             <Field label="Passo a passo"><Textarea value={exerciseForm.executionSteps} onChange={(event) => setExerciseForm((current) => ({ ...current, executionSteps: event.target.value }))} placeholder="Uma instrução por linha" /></Field>
             <Field label="Dicas"><Textarea value={exerciseForm.executionTips} onChange={(event) => setExerciseForm((current) => ({ ...current, executionTips: event.target.value }))} placeholder="Uma dica por linha" /></Field>
@@ -712,7 +743,10 @@ export function WorkoutBoard({
               return (
                 <div key={draft.id} className="grid gap-3 rounded-lg border border-line p-3">
                   <div className="flex items-center justify-between gap-3">
-                    <strong>{exercise?.name || "Exercício"}</strong>
+                    <div>
+                      <strong>{exercise?.name || "Exercício"}</strong>
+                      <span className="mt-1 block text-xs font-semibold text-zinc-500">Defina séries, repetições, carga sugerida, descanso e observação para este aluno.</span>
+                    </div>
                     <div className="flex gap-1">
                       <Button type="button" variant="secondary" className="h-9 min-h-9 px-3" onClick={() => moveDraft(index, -1)}><ArrowUp className="h-4 w-4" /></Button>
                       <Button type="button" variant="secondary" className="h-9 min-h-9 px-3" onClick={() => moveDraft(index, 1)}><ArrowDown className="h-4 w-4" /></Button>
