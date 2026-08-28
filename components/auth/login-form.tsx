@@ -20,11 +20,15 @@ type ProfileAccessRow = {
   status: string;
 };
 
-export function LoginForm({ demoMode = false }: { demoMode?: boolean }) {
+export function LoginForm({ demoMode = false, initialProfileLinkError = false }: { demoMode?: boolean; initialProfileLinkError?: boolean }) {
   const router = useRouter();
   const [email, setEmail] = useState(demoMode ? "coach@coachflow.com" : "");
   const [password, setPassword] = useState(demoMode ? "123456" : "");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(
+    initialProfileLinkError
+      ? "Acesso nao vinculado corretamente. O usuario autenticado precisa ter um profile com id igual ao auth.uid()."
+      : ""
+  );
   const [isPending, startTransition] = useTransition();
 
   function handleSubmit() {
@@ -42,22 +46,12 @@ export function LoginForm({ demoMode = false }: { demoMode?: boolean }) {
           .eq("id", data.user.id)
           .maybeSingle() as { data: ProfileAccessRow | null; error: Error | null };
 
-        let profile = profileResult.data;
-        let profileError = profileResult.error;
-
-        if (!profile && !profileError && data.user.email) {
-          const fallback = await supabase
-            .from("profiles")
-            .select("role, status")
-            .eq("email", data.user.email.toLowerCase())
-            .maybeSingle() as { data: ProfileAccessRow | null; error: Error | null };
-          profile = fallback.data;
-          profileError = fallback.error;
-        }
+        const profile = profileResult.data;
+        const profileError = profileResult.error;
 
         if (profileError || !profile || !isUserRole(profile.role)) {
           await supabase.auth.signOut();
-          setError("Perfil de acesso nao encontrado. Verifique a tabela profiles no Supabase.");
+          setError("Acesso nao vinculado corretamente. O usuario autenticado precisa ter um profile com id igual ao auth.uid().");
           return;
         }
 

@@ -1,8 +1,9 @@
 import { LoginForm } from "@/components/auth/login-form";
 import { isDemoModeEnabled } from "@/lib/config/demo";
 
-export default function LoginPage() {
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const demoMode = isDemoModeEnabled();
+  const params = await searchParams;
 
   return (
     <div className="w-full max-w-md rounded-lg border border-line bg-white p-6 shadow-soft">
@@ -10,7 +11,7 @@ export default function LoginPage() {
       <h2 className="mt-3 text-3xl font-black text-ink">Entrar</h2>
       <p className="mt-2 text-sm leading-6 text-zinc-500">Use seu e-mail e senha para acessar a plataforma.</p>
       <div className="mt-6">
-        <LoginForm demoMode={demoMode} />
+        <LoginForm demoMode={demoMode} initialProfileLinkError={params.error === "profile_not_linked"} />
       </div>
     </div>
   );

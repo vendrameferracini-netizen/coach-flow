@@ -64,19 +64,10 @@ export async function getAppSession(requiredRoles?: UserRole[]): Promise<AppSess
     .eq("id", user.id)
     .maybeSingle();
 
-  if (!profile && user.email) {
-    const fallback = await supabase
-      .from("profiles")
-      .select("id, role, full_name, email, phone, cpf, status, plan, coach_id, created_at, notes")
-      .eq("email", user.email.toLowerCase())
-      .maybeSingle();
-    profile = fallback.data;
-  }
-
-  if (!profile) redirect("/login");
+  if (!profile) redirect("/login?error=profile_not_linked");
 
   const mappedProfile = mapProfile(profile);
-  if (!mappedProfile || mappedProfile.status !== "active") redirect("/login");
+  if (!mappedProfile || mappedProfile.status !== "active") redirect("/login?error=profile_not_linked");
 
   if (requiredRoles?.length && !requiredRoles.includes(mappedProfile.role)) redirect("/dashboard");
   return { profile: mappedProfile, isDemo: false };

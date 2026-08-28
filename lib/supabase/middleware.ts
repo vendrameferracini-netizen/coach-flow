@@ -58,9 +58,11 @@ export async function updateSession(request: NextRequest) {
 
   function redirectTo(path: string) {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = path;
-    if (path === "/login" && isProtectedRoute) redirectUrl.searchParams.set("next", pathname);
-    if (path !== "/login") redirectUrl.search = "";
+    const [targetPath, targetSearch] = path.split("?");
+    redirectUrl.pathname = targetPath;
+    redirectUrl.search = targetSearch ? `?${targetSearch}` : "";
+    if (targetPath === "/login" && isProtectedRoute) redirectUrl.searchParams.set("next", pathname);
+    if (targetPath !== "/login") redirectUrl.search = "";
 
     const redirectResponse = NextResponse.redirect(redirectUrl);
     response.cookies.getAll().forEach((cookie) => redirectResponse.cookies.set(cookie));
@@ -76,20 +78,11 @@ export async function updateSession(request: NextRequest) {
     .eq("id", user.id)
     .maybeSingle() as { data: ProfileAccessRow | null; error: Error | null };
 
-  let profile = profileResult.data;
-
-  if (!profile && user.email) {
-    const fallback = await supabase
-      .from("profiles")
-      .select("role, status")
-      .eq("email", user.email.toLowerCase())
-      .maybeSingle() as { data: ProfileAccessRow | null; error: Error | null };
-    profile = fallback.data;
-  }
+  const profile = profileResult.data;
 
   if (isProtectedRoute && (!profile || !isUserRole(profile.role) || profile.status !== "active")) {
     await supabase.auth.signOut();
-    return redirectTo("/login");
+    return redirectTo("/login?error=profile_not_linked");
   }
 
   if (profile && isUserRole(profile.role) && isAuthRoute) {
