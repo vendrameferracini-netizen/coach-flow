@@ -12,6 +12,7 @@ import {
   UserRound,
   UsersRound
 } from "lucide-react";
+import { LogoutButton } from "@/components/auth/logout-button";
 import { cn } from "@/lib/utils";
 import type { UserRole } from "@/types/domain";
 
@@ -66,9 +67,12 @@ export function Sidebar({ role = "coach" }: { role?: UserRole }) {
           );
         })}
       </nav>
-      <div className="mt-auto rounded-lg border border-white/10 bg-white/10 p-4 text-sm">
-        <strong className="block">Ambiente seguro</strong>
-        <span className="mt-1 block text-white/62">RLS, Auth e isolamento por Coach.</span>
+      <div className="mt-auto grid gap-3">
+        <LogoutButton compact className="w-full justify-start" />
+        <div className="rounded-lg border border-white/10 bg-white/10 p-4 text-sm">
+          <strong className="block">Ambiente seguro</strong>
+          <span className="mt-1 block text-white/62">RLS, Auth e isolamento por Coach.</span>
+        </div>
       </div>
     </aside>
   );

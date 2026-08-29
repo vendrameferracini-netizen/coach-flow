@@ -7,7 +7,7 @@ import { formatDate } from "@/lib/utils";
 import type { Assessment, Diet, HormonalProtocol, Message, Student, Workout } from "@/types/domain";
 
 const cardStyles = {
-  diet: "border-emerald-100 bg-emerald-600 text-white shadow-emerald-200/60",
+  diet: "border-emerald bg-emerald text-white shadow-emerald/20 hover:bg-forest",
   progress: "border-violet-100 bg-violet-600 text-white shadow-violet-200/60",
   coach: "border-orange-100 bg-orange-500 text-white shadow-orange-200/60",
   assessment: "border-amber-100 bg-amber-400 text-amber-950 shadow-amber-200/60",
